@@ -1,0 +1,28 @@
+# Root .gitignore for monorepo (Frontend & Backend)
+
+# General
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.swp
+
+# Frontend (React/Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+
+# Backend (Spring Boot/Maven)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.iws
+backend/*.iml
+backend/*.ipr
+backend/nbproject/private/
+backend/nbbuild/
+backend/build/
+
+# Ignore .agents and temporary files
+.agents/
+vite.log

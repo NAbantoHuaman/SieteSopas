@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: SIGEPAM
+
+  # Project Loom - Virtual Threads
+  threads:
+    virtual:
+      enabled: true
+
+  # --- Database: H2 en memoria (perfil dev) ---
+  # Cambia a PostgreSQL cuando tengas la BD lista:
+  # datasource:
+  #   url: jdbc:postgresql://localhost:5432/sigepam_db
+  #   username: postgres
+  #   password: postgres
+  #   driver-class-name: org.postgresql.Driver
+
+  datasource:
+    url: jdbc:h2:file:./data/sigepam_dev
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    # Para H2 (cambiar a PostgreSQLDialect con PostgreSQL):
+    database-platform: org.hibernate.dialect.H2Dialect
+
+  # CORS
+  web:
+    cors:
+      allowed-origins: http://localhost:5173
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+
+# JWT Config
+app:
+  jwt:
+    secret: "3c3e7b1a4c9d5f8b9e2a1b0c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e"
+    expiration-ms: 10800000 # 3 hours
+
+  vapid:
+    subject: "mailto:contacto@sietesopas.pe"
+    public-key: "BMyz-xYtM_1gWb_-J98OqE9tXYmK-c3Hj_s6tN8qJ9wLgS-wUaH2E5_qL0mJtYkH9e_gK7wP5xL0M8_qJ1e_k="
+    private-key: "dK2L_8yWqM3sA5x_9J4yE7tH1K0pM8_kL9eJ2qQ4tXY="
+
+server:
+  port: 8080
