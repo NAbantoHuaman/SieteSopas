@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Users } from 'lucide-react';
+import { CheckCircle2, Users, Receipt, X } from 'lucide-react';
 
-export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancelModal, clearTicket }) => {
+export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancelModal, clearTicket, handleFinalizeVisit, clientReceipt }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [scrollY, setScrollY] = useState(0);
 
@@ -12,18 +12,58 @@ export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancel
   }, []);
 
   useEffect(() => {
-    if (myTicket && myTicket.waitTime) {
-// ... (rest of the timer logic)
+    if (myTicket && myTicket.createdAt) {
+      const calculateTimeLeft = () => {
+        // Si el ticket ya está asignado o llamando, el tiempo es 0
+        if (myTicket.status === 'ASIGNADO' || myTicket.status === 'LLAMANDO') return 0;
+
+        const created = new Date(myTicket.createdAt).getTime();
+        const now = new Date().getTime();
+        const elapsedSecs = Math.floor((now - created) / 1000);
+        const totalDemoWait = 30; // MODO DEMO: 30 segundos
+        return Math.max(0, totalDemoWait - elapsedSecs);
+      };
+
+      // Función para actualizar el estado del contador
+      const updateTimer = () => {
+        setTimeLeft(calculateTimeLeft());
+      };
+
+      // Inicialización inmediata
+      updateTimer();
+
+      // Intervalo de cada segundo
+      const timer = setInterval(updateTimer, 1000);
+
+      // INTELIGENCIA EXTRA: 
+      // Si el usuario cambia de pestaña y vuelve, los navegadores a veces "pausan" el JS.
+      // Este listener fuerza el recalculo apenas la pestaña vuelve a estar visible.
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          updateTimer();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        clearInterval(timer);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
   }, [myTicket]);
 
-// ... (formatTime function)
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')} min`;
+  };
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-80px)] w-full overflow-hidden relative">
       
       {/* 1. HERO SECTION (Fachada Full Width) */}
-      <div className="relative w-full h-[60vh] md:h-[70vh] flex items-center justify-center overflow-hidden border-b border-white/5 shadow-2xl">
+      <div className="relative w-full h-[50vh] md:h-[55vh] lg:h-[70vh] flex items-center justify-center overflow-hidden border-b border-white/5 shadow-2xl">
         <div 
           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-60 transform transition-transform duration-700 ease-out"
           style={{ 
@@ -38,16 +78,16 @@ export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancel
           <span className="inline-block text-[11px] uppercase tracking-[0.3em] text-[#FBAF40] font-bold mb-2 px-4 py-1.5 rounded-full border border-[#FBAF40]/30 bg-[#FBAF40]/10 backdrop-blur-md shadow-[0_0_15px_rgba(251,176,64,0.15)]">
             Restaurante desde 1995
           </span>
-          <h1 className="text-5xl md:text-8xl font-display font-black tracking-tight text-white leading-[1.05] drop-shadow-2xl">
-            La tradición <br className="hidden md:block"/>que <span className="gradient-text italic">reconforta.</span>
+          <h1 className="text-4xl md:text-5xl lg:text-8xl font-display font-black tracking-tight text-white leading-[1.05] drop-shadow-2xl">
+            La tradición <br className="hidden lg:block"/>que <span className="gradient-text italic">reconforta.</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-300 leading-relaxed max-w-2xl mx-auto font-medium drop-shadow-md">
+          <p className="text-base md:text-lg lg:text-xl text-gray-300 leading-relaxed max-w-2xl mx-auto font-medium drop-shadow-md">
             Únete a nuestra cola virtual desde donde estés. Te avisaremos en tiempo real cuando tu mesa esté lista.
           </p>
           
-          <div className="flex flex-col sm:flex-row justify-center gap-4 text-sm font-medium pt-4">
-            <span className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 backdrop-blur-md text-gray-200 shadow-xl"><CheckCircle2 size={18} className="text-[#008248] mr-2"/>Sabor que une familias</span>
-            <span className="flex items-center justify-center px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 backdrop-blur-md text-gray-200 shadow-xl"><CheckCircle2 size={18} className="text-[#EE1D23] mr-2"/>Tradición en cada bocado</span>
+          <div className="flex flex-col sm:flex-row justify-center gap-2 md:gap-4 text-xs md:text-sm font-medium pt-4">
+            <span className="flex items-center justify-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl bg-black/40 border border-white/10 backdrop-blur-md text-gray-200 shadow-xl"><CheckCircle2 size={16} className="text-[#008248] mr-2"/>Sabor que une familias</span>
+            <span className="flex items-center justify-center px-3 md:px-4 py-2 md:py-2.5 rounded-xl bg-black/40 border border-white/10 backdrop-blur-md text-gray-200 shadow-xl"><CheckCircle2 size={16} className="text-[#EE1D23] mr-2"/>Tradición en cada bocado</span>
           </div>
         </div>
       </div>
@@ -56,7 +96,7 @@ export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancel
       <div className="relative w-full flex-1 flex flex-col items-center justify-center px-5 py-12 md:py-20 lg:py-24 max-w-7xl mx-auto">
         
         {/* Tarjeta Central de la Cola (Z-index superior para interacción) */}
-        <div className="relative z-20 w-full max-w-md glass-card p-8 md:p-10 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] border border-white/10 animate-scale-in">
+        <div className="relative z-20 w-full max-w-sm md:max-w-md glass-card p-6 md:p-8 lg:p-10 rounded-[1.5rem] md:rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] border border-white/10 animate-scale-in">
           
           {/* Luz de acento detrás de la tarjeta */}
           <div className="absolute -inset-0.5 bg-gradient-to-b from-red-500/20 to-transparent rounded-[2rem] blur-xl opacity-50 -z-10 pointer-events-none"></div>
@@ -101,18 +141,26 @@ export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancel
               </form>
             </>
           ) : myTicket?.status === 'ASIGNADO' ? (
-            <div className="text-center space-y-6 animate-fade-in py-4">
+            <div className="text-center space-y-5 animate-fade-in py-4">
               <div className="w-28 h-28 bg-gradient-to-br from-green-500 to-teal-600 p-[3px] rounded-full mx-auto animate-float shadow-[0_0_60px_rgba(16,185,129,0.3)] duration-700">
                 <div className="w-full h-full bg-[#08080A] rounded-full flex items-center justify-center">
                     <CheckCircle2 size={56} className="text-green-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
                 </div>
               </div>
-              <h2 className="text-4xl font-display font-black text-white mt-6 mb-2">¡Mesa Lista!</h2>
-              <p className="text-lg text-gray-400 mb-10 leading-relaxed px-4">
-                Por favor acércate al anfitrión. <br/><span className="font-bold text-white">¡Disfruta Siete Sopas!</span>
+              <h2 className="text-3xl md:text-4xl font-display font-black text-white mt-6 mb-1">¡Mesa Lista!</h2>
+              
+              {myTicket.mesaNumero && (
+                <div className="bg-gradient-to-br from-green-500/10 to-teal-500/10 border border-green-500/30 rounded-2xl p-5 mx-4">
+                  <p className="text-[10px] text-green-300/70 font-bold uppercase tracking-[0.3em] mb-1">Tu mesa asignada</p>
+                  <span className="text-5xl font-black text-white drop-shadow-lg">#{myTicket.mesaNumero}</span>
+                </div>
+              )}
+              
+              <p className="text-sm md:text-base text-gray-400 leading-relaxed px-4">
+                Acércate al anfitrión de Siete Sopas. <br/><span className="font-bold text-white">¡Disfruta tu visita!</span>
               </p>
               <button 
-                onClick={clearTicket}
+                onClick={handleFinalizeVisit || clearTicket}
                 className="w-full border-2 border-white/10 hover:border-white/30 text-white font-bold py-4 px-4 rounded-2xl transition-all hover:bg-white/5 mt-2 text-sm uppercase tracking-widest"
               >
                 Finalizar visita
@@ -161,6 +209,53 @@ export const ClientHomeView = ({ myTicket, queue, handleJoinQueue, setShowCancel
         </div>
 
       </div>
+
+      {/* Modal de Ticket (Recibo) para Cliente */}
+      {clientReceipt && (
+        <div className="fixed inset-0 z-[150] flex justify-center bg-black/90 backdrop-blur-md p-4 sm:p-8 overflow-y-auto animate-fade-in">
+          <div className="bg-white text-gray-900 rounded-2xl shadow-[0_0_50px_rgba(255,255,255,0.1)] w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh] border border-gray-200 my-auto">
+            
+            {/* Header Ticket */}
+            <div className="bg-[#1a1a1a] p-5 text-center relative border-b-[5px] border-dashed border-gray-300">
+              <img src="/images/logo.png" alt="Siete Sopas" className="h-10 mx-auto mb-3 opacity-90 brightness-200" />
+              <h3 className="text-xl font-black text-white tracking-widest uppercase">FACTURA ELECTRÓNICA</h3>
+              <p className="text-xs text-gray-400 font-mono mt-1">CLIENTE • MESA #{clientReceipt.mesa}</p>
+            </div>
+
+            {/* Body Ticket */}
+            <div className="p-6 overflow-y-auto bg-gray-50 flex-1 min-h-0 relative custom-scrollbar">
+              <div className="space-y-4 font-mono text-sm">
+                {clientReceipt.detalleItems?.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-start border-b border-gray-200 pb-3">
+                    <div className="flex-1 pr-4 whitespace-normal break-words leading-tight">
+                      <span className="font-bold text-gray-800">{item.cantidad}x</span> <span className="text-gray-600">{item.nombre}</span>
+                    </div>
+                    <div className="font-bold whitespace-nowrap text-gray-800">
+                      S/ {Number(item.subtotal).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer Ticket */}
+            <div className="p-6 bg-gray-100 border-t-2 border-dashed border-gray-300">
+              <div className="flex justify-between items-center bg-[#1a1a1a] text-white p-4 rounded-xl mb-6 shadow-inner">
+                <span className="font-black text-sm text-gray-300">TOTAL BOLETA</span>
+                <span className="font-black text-2xl text-green-400">S/ {Number(clientReceipt.total).toFixed(2)}</span>
+              </div>
+              
+              <button 
+                onClick={clearTicket}
+                className="w-full bg-[#1a1a1a] text-white hover:bg-gray-800 text-sm font-bold tracking-widest uppercase py-4 rounded-xl transition-all shadow-lg border border-gray-700 flex items-center justify-center"
+              >
+                <X size={18} className="mr-2" />
+                Cerrar y Volver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

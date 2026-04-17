@@ -36,7 +36,9 @@ public class ComandaService {
     public sealed interface ComandaEvent permits
             ComandaEvent.IniciarPreparacion,
             ComandaEvent.MarcarListo,
-            ComandaEvent.Entregar {
+            ComandaEvent.Entregar,
+            ComandaEvent.Despachar,
+            ComandaEvent.FinalizarDelivery {
 
         record IniciarPreparacion(Long comandaId) implements ComandaEvent {
         }
@@ -45,6 +47,12 @@ public class ComandaService {
         }
 
         record Entregar(Long comandaId) implements ComandaEvent {
+        }
+
+        record Despachar(Long comandaId) implements ComandaEvent {
+        }
+
+        record FinalizarDelivery(Long comandaId) implements ComandaEvent {
         }
     }
 
@@ -81,6 +89,9 @@ public class ComandaService {
             case ComandaEvent.MarcarListo e ->
                 transicionar(e.comandaId(), EstadoComanda.PREPARANDO, EstadoComanda.LISTO);
             case ComandaEvent.Entregar e -> transicionar(e.comandaId(), EstadoComanda.LISTO, EstadoComanda.ENTREGADO);
+            case ComandaEvent.Despachar e -> transicionar(e.comandaId(), EstadoComanda.ENTREGADO, EstadoComanda.EN_CAMINO);
+            case ComandaEvent.FinalizarDelivery e ->
+                transicionar(e.comandaId(), EstadoComanda.EN_CAMINO, EstadoComanda.ENTREGADO_CLIENTE);
         };
     }
 
@@ -108,10 +119,19 @@ public class ComandaService {
                 .findAllByEstadoIn(List.of(
                         EstadoComanda.PENDIENTE,
                         EstadoComanda.PREPARANDO,
-                        EstadoComanda.LISTO))
+                        EstadoComanda.LISTO,
+                        EstadoComanda.ENTREGADO,
+                        EstadoComanda.EN_CAMINO,
+                        EstadoComanda.ENTREGADO_CLIENTE))
                 .stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    public ComandaDto obtenerComandaPorId(Long id) {
+        Comanda comanda = comandaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Comanda no encontrada con ID: " + id));
+        return toDto(comanda);
     }
 
     public List<ComandaDto> listarPorEstado(EstadoComanda estado) {

@@ -35,7 +35,9 @@ const apiFetch = async (endpoint, options = {}) => {
 
   if (res.status === 204) return null;
 
-  return res.json();
+  const text = await res.text();
+  if (!text) return null;
+  return JSON.parse(text);
 };
 
 export const login = (email, password) =>
@@ -99,6 +101,9 @@ export const deleteMesa = (id) =>
 
 export const getComandas = () =>
   apiFetch('/kitchen/comandas');
+
+export const getComandaById = (id) =>
+  apiFetch(`/kitchen/comandas/${id}`);
 
 export const createComanda = (mesaId, items, total) =>
   apiFetch('/kitchen/comandas', {

@@ -35,9 +35,9 @@ public class ColaController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> cancelarTicket(@PathVariable Long id) {
-        colaVirtualService.cancelarTicket(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Map<String, Object>> cancelarTicket(@PathVariable Long id) {
+        Map<String, Object> receipt = colaVirtualService.cancelarTicket(id);
+        return ResponseEntity.ok(receipt);
     }
 
     @PostMapping("/{id}/asignar")

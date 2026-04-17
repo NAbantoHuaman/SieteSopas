@@ -25,6 +25,11 @@ public class ComandaController {
         return ResponseEntity.ok(comandaService.listarActivas());
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<ComandaDto> obtenerPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(comandaService.obtenerComandaPorId(id));
+    }
+
     @PostMapping
     public ResponseEntity<ComandaDto> crearComanda(@Valid @RequestBody CreateComandaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(comandaService.crearComanda(request));
@@ -41,6 +46,8 @@ public class ComandaController {
             case "INICIAR_PREPARACION" -> new ComandaEvent.IniciarPreparacion(id);
             case "MARCAR_LISTO" -> new ComandaEvent.MarcarListo(id);
             case "ENTREGAR" -> new ComandaEvent.Entregar(id);
+            case "DESPACHAR" -> new ComandaEvent.Despachar(id);
+            case "FINALIZAR" -> new ComandaEvent.FinalizarDelivery(id);
             default -> throw new IllegalArgumentException("Acción inválida: " + accion);
         };
 

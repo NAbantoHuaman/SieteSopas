@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.annotation.Lazy;
 
 import java.util.List;
 
@@ -19,12 +20,18 @@ import java.util.List;
  * Publica eventos WebSocket en /topic/tables cuando cambia el estado.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MesaService {
 
     private final MesaRepository mesaRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final CajaService cajaService;
+    
+    public MesaService(MesaRepository mesaRepository, SimpMessagingTemplate messagingTemplate, @Lazy CajaService cajaService) {
+        this.mesaRepository = mesaRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.cajaService = cajaService;
+    }
 
     public List<MesaDto> listarTodas() {
         return mesaRepository.findAllByOrderByNumeroAsc().stream()
@@ -66,6 +73,12 @@ public class MesaService {
 
         // Validar transiciones válidas
         validarTransicion(mesa.getEstado(), nuevoEstado);
+
+        if (nuevoEstado == EstadoMesa.LIMPIEZA && mesa.getEstado() == EstadoMesa.OCUPADA) {
+            // El proceso de pago ya se encarga de autogenerar el consumo y cambiar el estado a limpieza
+            cajaService.procesarPago(mesaId);
+            return toDto(mesaRepository.findById(mesaId).get());
+        }
 
         mesa.setEstado(nuevoEstado);
         if (nuevoEstado == EstadoMesa.LIBRE) {
@@ -144,6 +157,11 @@ public class MesaService {
         mesaRepository.delete(mesa);
         publicarCambioMesas();
         log.info("Mesa ID {} eliminada", id);
+    }
+
+    public Mesa obtenerMesaPorId(Long id) {
+        return mesaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Mesa no encontrada: " + id));
     }
 
     private MesaDto toDto(Mesa m) {

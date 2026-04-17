@@ -52,8 +52,8 @@ app:
 
   vapid:
     subject: "mailto:contacto@sietesopas.pe"
-    public-key: "BMyz-xYtM_1gWb_-J98OqE9tXYmK-c3Hj_s6tN8qJ9wLgS-wUaH2E5_qL0mJtYkH9e_gK7wP5xL0M8_qJ1e_k="
-    private-key: "dK2L_8yWqM3sA5x_9J4yE7tH1K0pM8_kL9eJ2qQ4tXY="
+    public-key: "BPnby2FfpX0CUl-EN5C2o4S1myOXWGGUvQ00GS-NhBkD1HJWTj6Ecea4E71K4pzAd8D_297YTDj-5dc8UZavJ7o"
+    private-key: "zPXUgIF54dMsc-mS9eD_H9eu7S6YLXrG8E8GYZDB9Q4"
 
 server:
   port: 8080

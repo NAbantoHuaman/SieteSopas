@@ -1,0 +1,17 @@
+{
+  "name": "Siete Sopas - Cola Virtual",
+  "short_name": "Siete Sopas",
+  "description": "Sistema de cola virtual del restaurante Siete Sopas. Saca tu ticket y recibe notificaciones cuando tu mesa esté lista.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080A",
+  "theme_color": "#EE1D23",
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

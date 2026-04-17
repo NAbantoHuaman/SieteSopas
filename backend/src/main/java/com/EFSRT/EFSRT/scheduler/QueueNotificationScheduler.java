@@ -26,40 +26,52 @@ public class QueueNotificationScheduler {
     private final PushSubscriptionRepository pushSubscriptionRepository;
     private final PushNotificationService pushNotificationService;
 
-    @Scheduled(fixedRate = 60000) // cada minuto
+    @Scheduled(fixedRate = 2000) // cada 2 segundos (Modo Demo)
     @Transactional
     public void verificarYNotificarTickets() {
-        List<TicketCola> activos = ticketColaRepository.findAllByEstadoInOrderByCreatedAtAsc(
+        List<TicketCola> activos = ticketColaRepository.findAllByEstadoInWithMesaOrderByCreatedAtAsc(
                 List.of(EstadoTicket.ESPERANDO, EstadoTicket.LLAMANDO, EstadoTicket.ASIGNADO));
+
+        if (!activos.isEmpty()) {
+            log.info("[DEMO-SCHEDULER] Tickets activos encontrados: {}", activos.size());
+        }
 
         LocalDateTime now = LocalDateTime.now();
 
         for (TicketCola ticket : activos) {
             Optional<PushSubscription> subOpt = pushSubscriptionRepository.findByTicketId(ticket.getId());
-            if (subOpt.isEmpty())
+
+            if (subOpt.isEmpty()) {
+                log.warn("[DEMO-SCHEDULER] Ticket #{} ('{}') NO tiene suscripción push registrada.", 
+                         ticket.getId(), ticket.getNombreCliente());
                 continue;
+            }
 
             PushSubscription sub = subOpt.get();
 
             if (ticket.getEstado() == EstadoTicket.ESPERANDO || ticket.getEstado() == EstadoTicket.LLAMANDO) {
-                // Notificar 5 min
-                long minutosTranscurridos = ChronoUnit.MINUTES.between(ticket.getCreatedAt(), now);
-                long tiempoRestante = ticket.getTiempoEsperaEstimado() - minutosTranscurridos;
+                long segundosTranscurridos = ChronoUnit.SECONDS.between(ticket.getCreatedAt(), now);
+                log.info("[DEMO-SCHEDULER] Ticket #{} - Segundos transcurridos: {}s, Notificado: {}", 
+                         ticket.getId(), segundosTranscurridos, ticket.isNotified5Min());
 
-                if (tiempoRestante <= 5 && !ticket.isNotified5Min()) {
+                if (segundosTranscurridos >= 30 && !ticket.isNotified5Min()) {
+                    log.info("[DEMO-SCHEDULER] >>> ENVIANDO PUSH a Ticket #{} <<<", ticket.getId());
                     enviarPush(sub, "¡Ya casi!",
-                            "Tu mesa estará lista en menos de 5 minutos. Por favor, acércate a la entrada.");
+                            "Tu mesa está lista. Por favor, acércate a la entrada de Siete Sopas.");
                     ticket.setNotified5Min(true);
                     ticketColaRepository.save(ticket);
+                    log.info("[DEMO-SCHEDULER] >>> PUSH ENVIADO EXITOSAMENTE <<<");
                 }
             } else if (ticket.getEstado() == EstadoTicket.ASIGNADO) {
-                // Notificar Asignacion
                 if (!ticket.isNotifiedAsignado()) {
-                    enviarPush(sub, "¡Mesa Asignada!", "¡Ya es tu turno! Tu mesa está lista.");
+                    String mesaInfo = ticket.getMesaAsignada() != null 
+                        ? "Mesa #" + ticket.getMesaAsignada().getNumero() 
+                        : "Tu mesa";
+                    log.info("[DEMO-SCHEDULER] >>> ENVIANDO PUSH DE ASIGNACIÓN a Ticket #{} - {} <<<", ticket.getId(), mesaInfo);
+                    enviarPush(sub, "🍽️ ¡" + mesaInfo + " Lista!", 
+                            "Acércate al anfitrión de Siete Sopas. ¡Disfruta tu visita!");
                     ticket.setNotifiedAsignado(true);
                     ticketColaRepository.save(ticket);
-
-                    // Borramos la suscripcion para no volver a enviar tras terminar
                     pushSubscriptionRepository.delete(sub);
                 }
             }

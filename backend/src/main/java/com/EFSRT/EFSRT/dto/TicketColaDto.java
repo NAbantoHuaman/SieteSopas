@@ -10,5 +10,7 @@ public record TicketColaDto(
         Integer tiempoEsperaEstimado,
         EstadoTicket estado,
         Long mesaAsignadaId,
-        LocalDateTime createdAt) {
+        Integer mesaNumero,
+        LocalDateTime createdAt,
+        String receiptJson) {
 }

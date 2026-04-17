@@ -4,5 +4,6 @@ public enum EstadoTicket {
     ESPERANDO,
     LLAMANDO,
     ASIGNADO,
-    CANCELADO
+    CANCELADO,
+    FINALIZADO
 }

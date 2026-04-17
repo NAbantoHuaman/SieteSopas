@@ -4,5 +4,7 @@ public enum EstadoComanda {
     PENDIENTE,
     PREPARANDO,
     LISTO,
-    ENTREGADO
+    ENTREGADO, // Entregado a mesa O al despachador/repartidor
+    EN_CAMINO,
+    ENTREGADO_CLIENTE
 }

@@ -1,4 +1,4 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, BarChart2 } from 'lucide-react';
 
 export const AdminDashboardView = ({ queue, tables, orders, dashboardStats }) => {
   const stats = [

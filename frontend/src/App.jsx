@@ -58,6 +58,7 @@ import { AdminInventarioView } from './views/admin/AdminInventarioView';
 import { AdminCashierView } from './views/admin/AdminCashierView';
 import { AdminAnalyticsView } from './views/admin/AdminAnalyticsView';
 import { AdminSettingsView } from './views/admin/AdminSettingsView';
+import { AdminDeliveryView } from './views/admin/AdminDeliveryView';
 
 export default function App() {
   const [appMode, setAppMode] = useState('client'); 
@@ -89,6 +90,7 @@ export default function App() {
   const [apiError, setApiError] = useState(null);
 
   const [assigningQueueId, setAssigningQueueId] = useState(null);
+  const [clientReceipt, setClientReceipt] = useState(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('user');
@@ -109,7 +111,8 @@ export default function App() {
         name: t.nombreCliente,
         size: t.tamanoGrupo,
         waitTime: t.tiempoEsperaEstimado || 10,
-        status: t.estado
+        status: t.estado,
+        createdAt: t.createdAt
       })));
       
       const savedTicketStr = localStorage.getItem('myTicket');
@@ -117,8 +120,16 @@ export default function App() {
         try {
            const savedTicket = JSON.parse(savedTicketStr);
            const ticketInfo = await api.getTicketStatus(savedTicket.id);
-           if (ticketInfo.estado !== savedTicket.status) {
-              const updatedTicket = { ...savedTicket, status: ticketInfo.estado };
+           if (ticketInfo.estado === 'FINALIZADO') {
+              if (ticketInfo.receiptJson) {
+                  try {
+                      setClientReceipt(JSON.parse(ticketInfo.receiptJson));
+                  } catch(e) { console.error('Error parsing receipt JSON', e); }
+              }
+              setMyTicket(null);
+              localStorage.removeItem('myTicket');
+           } else if (ticketInfo.estado !== savedTicket.status || ticketInfo.mesaNumero !== savedTicket.mesaNumero) {
+              const updatedTicket = { ...savedTicket, status: ticketInfo.estado, mesaNumero: ticketInfo.mesaNumero || null };
               setMyTicket(updatedTicket);
               localStorage.setItem('myTicket', JSON.stringify(updatedTicket));
            }
@@ -128,6 +139,29 @@ export default function App() {
               localStorage.removeItem('myTicket');
            }
         }
+      }
+      
+      // Sync client orders directly
+      const history = JSON.parse(localStorage.getItem('clientOrders') || '[]');
+      const needsSync = history.some(o => o.status !== 'ENTREGADO_CLIENTE');
+      
+      if (needsSync) {
+         try {
+            const updatedHistory = await Promise.all(history.map(async (histOrder) => {
+               if (histOrder.status === 'ENTREGADO_CLIENTE') return histOrder;
+               try {
+                   const freshData = await api.getComandaById(histOrder.dbId);
+                   return { ...histOrder, status: freshData.estado };
+               } catch (e) { return histOrder; }
+            }));
+            
+            // Solo actualizar si hay cambios reales para evitar re-renders infinitos
+            const hasChanged = JSON.stringify(updatedHistory) !== JSON.stringify(history);
+            if (hasChanged) {
+               setClientOrderHistory(updatedHistory);
+               localStorage.setItem('clientOrders', JSON.stringify(updatedHistory));
+            }
+         } catch(e) {}
       }
       
       const productosData = await api.getProductos();
@@ -184,22 +218,6 @@ export default function App() {
             };
           });
           setOrders(fetchedOrders);
-
-          // Sincronizar estados para el historial del cliente
-          setClientOrderHistory(prev => {
-            const updated = prev.map(histOrder => {
-               // Encontrar la comanda en el backend que corresponda.
-               // Como el backend autogenera el ID de DB y el frontend usa 'SS-..', 
-               // compararemos por historyDbId si lo guardamos en handleCheckout.
-               const backendMatch = fetchedOrders.find(fo => fo.id === histOrder.dbId);
-               if (backendMatch) {
-                  return { ...histOrder, status: backendMatch.status };
-               }
-               return histOrder;
-            });
-            localStorage.setItem('clientOrders', JSON.stringify(updated));
-            return updated;
-          });
         }
         if (statsData) setDashboardStats(statsData);
         if (billingData) setBillingTables(billingData);
@@ -308,8 +326,12 @@ export default function App() {
       const itemsString = cart.map(c => `${c.qty}x ${c.nombre}`).join(', ');
       
       let customerName = currentUser ? currentUser.name : 'Cliente Anónimo';
-      if (myTicket) customerName = myTicket.name;
-      const prefix = `[Ticket: ${customerName}] `;
+      let prefix = `[Delivery: ${customerName}] `;
+      
+      if (myTicket) {
+         customerName = myTicket.name;
+         prefix = `[Ticket: ${customerName}] `;
+      }
       
       const finalItems = prefix + itemsString;
       
@@ -380,24 +402,65 @@ export default function App() {
         name: ticket.nombreCliente,
         size: ticket.tamanoGrupo,
         waitTime: ticket.tiempoEsperaEstimado || (queue.length * 5 + 10),
-        status: ticket.estado
+        status: ticket.estado,
+        createdAt: ticket.createdAt
       };
       setQueue(prev => [...prev, mapped]);
       setMyTicket(mapped);
       localStorage.setItem('myTicket', JSON.stringify(mapped));
       addNotification(`Ticket creado: ${name}`, 'success');
       
-      if ('Notification' in window && 'serviceWorker' in navigator) {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          const registration = await navigator.serviceWorker.ready;
-          const publicVapidKey = 'BMyz-xYtM_1gWb_-J98OqE9tXYmK-c3Hj_s6tN8qJ9wLgS-wUaH2E5_qL0mJtYkH9e_gK7wP5xL0M8_qJ1e_k=';
-          const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-          });
-          await api.subscribeToPush(subscription, ticket.id).catch(err => console.error('Push update error', err));
+      // ===== SUSCRIPCIÓN PUSH (con diagnóstico completo) =====
+      try {
+        if (!('Notification' in window)) {
+          console.warn('[PUSH] Este navegador no soporta notificaciones.');
+        } else if (!('serviceWorker' in navigator)) {
+          console.warn('[PUSH] Este navegador no soporta Service Workers.');
+        } else {
+          console.log('[PUSH] 1/4 - Solicitando permiso de notificaciones...');
+          const permission = await Notification.requestPermission();
+          console.log('[PUSH] 2/4 - Permiso:', permission);
+          
+          if (permission !== 'granted') {
+            console.warn('[PUSH] Permiso denegado por el usuario.');
+            addNotification('Activa las notificaciones para recibir avisos de tu turno', 'warning');
+          } else {
+            console.log('[PUSH] 3/4 - Esperando Service Worker...');
+            const registration = await navigator.serviceWorker.ready;
+            console.log('[PUSH] Service Worker listo:', registration.scope);
+
+            const publicVapidKey = 'BPnby2FfpX0CUl-EN5C2o4S1myOXWGGUvQ00GS-NhBkD1HJWTj6Ecea4E71K4pzAd8D_297YTDj-5dc8UZavJ7o';
+            
+            // Verificar si ya existe una suscripción previa (puede tener claves VAPID viejas)
+            let subscription = await registration.pushManager.getSubscription();
+            if (subscription) {
+              console.log('[PUSH] Suscripción previa encontrada, eliminándola para usar nuevas claves...');
+              await subscription.unsubscribe();
+              subscription = null;
+            }
+            
+            console.log('[PUSH] Creando nueva suscripción push...');
+            subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+            });
+            
+            console.log('[PUSH] 4/4 - Registrando suscripción en servidor para ticket:', ticket.id);
+            const subData = subscription.toJSON();
+            console.log('[PUSH] Datos de suscripción:', JSON.stringify({
+              endpoint: subData.endpoint?.substring(0, 50) + '...',
+              hasKeys: !!(subData.keys?.p256dh && subData.keys?.auth),
+              ticketId: ticket.id
+            }));
+            
+            await api.subscribeToPush(subscription, ticket.id);
+            console.log('[PUSH] ✅ Suscripción registrada exitosamente en el servidor.');
+            addNotification('🔔 Notificaciones activadas. Te avisaremos cuando tu mesa esté lista.', 'success');
+          }
         }
+      } catch (pushError) {
+        console.error('[PUSH] ❌ Error en el proceso de suscripción push:', pushError);
+        addNotification('No se pudieron activar las notificaciones: ' + pushError.message, 'warning');
       }
     } catch (err) {
       addNotification(err.message || 'Error al unirse a la cola', 'error');
@@ -414,6 +477,23 @@ export default function App() {
       setMyTicket(null);
       localStorage.removeItem('myTicket');
       setShowCancelModal(false);
+    }
+  };
+
+  const handleFinalizeVisit = async () => {
+    if (!myTicket) return;
+    try {
+      const response = await api.cancelTicket(myTicket.id);
+      if (response && response.detalleItems && response.detalleItems.length > 0) {
+          setClientReceipt(response);
+      } else {
+          setMyTicket(null);
+          localStorage.removeItem('myTicket');
+      }
+    } catch (err) {
+      addNotification(err.message || 'Error al finalizar visita', 'error');
+      setMyTicket(null);
+      localStorage.removeItem('myTicket');
     }
   };
 
@@ -435,7 +515,12 @@ export default function App() {
 
   const handleOrderAction = async (orderId, action) => {
     try {
-      const accion = action === 'PREPARANDO' ? 'INICIAR_PREPARACION' : action === 'LISTO' ? 'MARCAR_LISTO' : 'ENTREGAR';
+      let accion = action;
+      if (action === 'PREPARANDO') accion = 'INICIAR_PREPARACION';
+      if (action === 'LISTO') accion = 'MARCAR_LISTO';
+      if (action === 'ENTREGAR') accion = 'ENTREGAR';
+      if (action === 'DESPACHAR') accion = 'DESPACHAR';
+      if (action === 'FINALIZAR') accion = 'FINALIZAR';
       await api.changeComandaStatus(orderId, accion);
       fetchAllData();
     } catch (err) {
@@ -471,7 +556,8 @@ export default function App() {
           clientView={clientView} 
           setClientView={setClientView} 
           currentUser={currentUser} 
-          cartCount={cartCount} 
+          cartCount={cartCount}
+          showCart={showCart}
           setShowCart={setShowCart} 
           handleLogout={handleLogout} 
         />
@@ -488,7 +574,10 @@ export default function App() {
                 queue={queue} 
                 handleJoinQueue={handleJoinQueue} 
                 setShowCancelModal={setShowCancelModal} 
+                handleFinalizeVisit={handleFinalizeVisit}
+                clientReceipt={clientReceipt}
                 clearTicket={() => {
+                  setClientReceipt(null);
                   setMyTicket(null);
                   localStorage.removeItem('myTicket');
                 }}
@@ -592,6 +681,7 @@ export default function App() {
           {activeTab === 'cashier' && <AdminCashierView billingTables={billingTables} fetchAllData={fetchAllData} addNotification={addNotification} />}
           {activeTab === 'queue' && <AdminQueueView queue={queue} assigningQueueId={assigningQueueId} setAssigningQueueId={setAssigningQueueId} tables={tables} handleAssignTable={handleAssignTable} />}
           {activeTab === 'kitchen' && <AdminKitchenView orders={orders} handleOrderAction={handleOrderAction} />}
+          {activeTab === 'delivery' && <AdminDeliveryView orders={orders} handleOrderAction={handleOrderAction} />}
           {activeTab === 'settings' && <AdminSettingsView addNotification={addNotification} />}
         </div>
       </main>

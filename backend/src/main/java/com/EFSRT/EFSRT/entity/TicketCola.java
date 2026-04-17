@@ -35,6 +35,9 @@ public class TicketCola {
     @JoinColumn(name = "mesa_asignada_id")
     private Mesa mesaAsignada;
 
+    @Column(columnDefinition = "TEXT")
+    private String receiptJson;
+
     @Column(name = "created_at", updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
